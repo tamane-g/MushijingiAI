@@ -6,7 +6,7 @@ class Card(ABC):
         self.cost = cost
 
 class Insect(Card):
-    def __init__(self, name: str, cost: int, hp: int, color: int, atkList: list[tuple[str,int]]) -> None:
+    def __init__(self, name: str, cost: int, hp: int, color: str, atkList: list[tuple[str,int]]) -> None:
         super().__init__(name, cost)
         self.hp = hp
         self.color = color

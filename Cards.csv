@@ -1,4 +1,4 @@
 ID,Category,Name,Cost,HP,Color,Atk_1_method,Atk_1_value,Atk_2_method,Atk_2_value
-1030,Insect,ナミテントウ,1,300,Red,Simple,100,,
-1063,Insect,カナブン,1,300,Blue,Simple,100,,
-1091,Insect,ニジュウヤホシテントウ,1,300,Green,Simple,100,,
+1030,Insect,ナミテントウ,1,300,Red,Simple,100,,0
+1063,Insect,カナブン,1,300,Blue,Simple,100,,0
+1091,Insect,ニジュウヤホシテントウ,1,300,Green,Simple,100,,0
