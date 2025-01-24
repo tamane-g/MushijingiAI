@@ -8,10 +8,10 @@ def showCards(cards: list[Cards.Card]) -> None:
     if issubclass(Cards.Insect, type(card)):
       print(f"{count}: {card.name} {card.cost}c {card.color} {card.hp}HP")
 
-def requireManaSet(inputRange: int) -> None:
+def requireManaSet(inputRange: int) -> int:
   while True:
     num = int(input("エサ場にセットするカードの番号を選んでください: "))
-    if num <= inputRange:
+    if -1 <= num and num <= inputRange:
       return num
     else:
       print("値が不正です")

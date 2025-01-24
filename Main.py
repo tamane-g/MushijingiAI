@@ -2,6 +2,7 @@ import pandas as pd
 import random
 import Cards
 import View
+import AI
 
 df = pd.read_csv("./Cards.csv",index_col=0,
                  dtype={"ID": int,
@@ -32,8 +33,10 @@ def CardDefine(id: int) -> Cards.Card:
                             card_data["Atk_2_value"])])
 
 class Player:
-  def __init__(self, DeckIDList: list[str], isAI: bool = False) -> None:
+  def __init__(self, DeckIDList: list[str], isAI: bool = False, name: str = "NoName") -> None:
     self.DeckIDList = DeckIDList
+    self.Name       = name
+    
     self.Deck       = []
     self.Hands      = []
     self.Trash      = []
@@ -69,8 +72,8 @@ class GameMaster:
     self.gameEnd = False
   
   def runGame(self) -> None:
-    self.decidePlayerOrder()
-    self.setAllPlayerCards()
+    self.setAllPlayerCards() # 縄張りや手札をセットアップ
+    self.decidePlayerOrder() # 先攻後攻を決める
     
     while not self.gameEnd:
       for currentPlayer in self.playerOrder:
@@ -79,22 +82,32 @@ class GameMaster:
         self.executeTurn(currentPlayer)
   
   def executeTurn(self, currentPlayer: Player) -> None:
+    # ドロー処理
     if not self.isFirstTurn():
       self.PlayerDrawDeck(currentPlayer)
     
+    if self.gameEnd:
+      return
+    
+    # AIか人間かで要求を分ける
     if currentPlayer.isAI:
       self.AI_TurnExecution(currentPlayer)
     else:
       self.userTurnExecution(currentPlayer)
-      
-    self.turnCount += 1
+    
+    self.turnCount += 1 # ターン数をインクリメント
 
   def userTurnExecution(self, currentPlayer: Player) -> None:
     View.showTurn(self.turnCount)
     View.showCards(currentPlayer.Hands)
+    num = View.requireManaSet(len(currentPlayer.Hands)-1)
+    if(num != -1):
+      self.PlayerPutCardToManaZone(currentPlayer, num)
   
   def AI_TurnExecution(self, currentPlayer: Player) -> None:
-    pass
+    num = AI.requireManaSet(currentPlayer.Hands)
+    if(num != -1):
+      self.PlayerPutCardToManaZone(currentPlayer, num)
 
   def isFirstTurn(self) -> bool:
     return self.turnCount == 0
@@ -114,7 +127,9 @@ class GameMaster:
     executorPlayer.Hands.append(executorPlayer.Deck.pop(0))
 
   def PlayerPutCardToManaZone(self, executorPlayer: Player, handNum: int) -> None:
-    executorPlayer.ManaZone.append(executorPlayer.Hands.pop(handNum))
+    card = executorPlayer.Hands.pop(handNum)
+    print(f"{executorPlayer.Name}が{card.name}をエサ場に置きました")
+    executorPlayer.ManaZone.append(card)
 
   def PlayerPlayCardFromHand(self, executorPlayer: Player, handNum: int) -> None:
     card = executorPlayer.Hands.pop(handNum)

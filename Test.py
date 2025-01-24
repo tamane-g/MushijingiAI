@@ -10,7 +10,7 @@ def makeSampleDeck():
   
   return sampleDeckID
 
-p1 = Player(makeSampleDeck())
-p2 = Player(makeSampleDeck())
+p1 = Player(makeSampleDeck(), name="User")
+p2 = Player(makeSampleDeck(), name="AI", isAI=True)
 game = GameMaster(p1, p2)
 game.runGame()
