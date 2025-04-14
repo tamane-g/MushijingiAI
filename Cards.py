@@ -8,6 +8,12 @@ class Card(ABC):
 class Insect(Card):
     def __init__(self, name: str, cost: int, hp: int, color: str, atkList: list[tuple[str,int]]) -> None:
         super().__init__(name, cost)
-        self.hp = hp
-        self.color = color
-        self.atkList = atkList
+        self._BaseHP   = hp
+        self.NowHP     = hp
+        self.color     = color
+        self.atkList   = atkList
+        self.isAtacked = False
+    
+    def reset(self):
+        self.NowHP     = self._BaseHP
+        self.isAtacked = False

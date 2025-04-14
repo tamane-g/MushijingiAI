@@ -19,6 +19,7 @@ df = pd.read_csv("./Cards.csv",index_col=0,
 print(df.keys())
 print(df)
 
+# idからCardクラスのインスタンスを定義
 def CardDefine(id: int) -> Cards.Card:
   card_data = df.loc[id]
   match card_data["Category"]:
@@ -41,10 +42,10 @@ class Player:
     self.Hands      = []
     self.Trash      = []
     self.Shields    = []
-    self.ManaZone   = []
+    self.MannaZone  = []
     self.BattleZone = []
     
-    self.manas      = 0
+    self.mannas     = 0
     self.isAI       = isAI
     
     self.registDeck()
@@ -73,7 +74,7 @@ class GameMaster:
   
   def runGame(self) -> None:
     self.setAllPlayerCards() # 縄張りや手札をセットアップ
-    self.decidePlayerOrder() # 先攻後攻を決める
+    self.setPlayerOrder() # 先攻後攻を決める
     
     while not self.gameEnd:
       for currentPlayer in self.playerOrder:
@@ -89,7 +90,7 @@ class GameMaster:
     if self.gameEnd:
       return
     
-    # AIか人間かで要求を分ける
+    # AIか人間かで処理を分ける
     if currentPlayer.isAI:
       self.AI_TurnExecution(currentPlayer)
     else:
@@ -97,22 +98,39 @@ class GameMaster:
     
     self.turnCount += 1 # ターン数をインクリメント
 
-  def userTurnExecution(self, currentPlayer: Player) -> None:
+  def userTurnExecution(self, executorPlayer: Player) -> None:
     View.showTurn(self.turnCount)
-    View.showCards(currentPlayer.Hands)
-    num = View.requireManaSet(len(currentPlayer.Hands)-1)
-    if(num != -1):
-      self.PlayerPutCardToManaZone(currentPlayer, num)
+    View.showCards(executorPlayer.Hands)
+    num = View.requireMannaSet(len(executorPlayer.Hands)-1)
+    if num != -1:
+      self.PlayerPutCardToMannaZone(executorPlayer, num)
+    self.PlayerCountMannas(executorPlayer)
+    
+    while(True):
+      View.showCards(executorPlayer.Hands)
+      num = View.requirePlayCard(self.getPlayableCardAndKeys(executorPlayer)[0])
+      if num == -1:
+        break
+      self.PlayerPlayCardFromHand(executorPlayer, num)
   
-  def AI_TurnExecution(self, currentPlayer: Player) -> None:
-    num = AI.requireManaSet(currentPlayer.Hands)
-    if(num != -1):
-      self.PlayerPutCardToManaZone(currentPlayer, num)
+  def AI_TurnExecution(self, executorPlayer: Player) -> None:
+    View.showTurn(self.turnCount)
+    num = AI.requireMannaSet(executorPlayer.Hands)
+    if num != -1:
+      self.PlayerPutCardToMannaZone(executorPlayer, num)
+    self.PlayerCountMannas(executorPlayer)
+    
+    while(True):
+      buf = self.getPlayableCardAndKeys(executorPlayer)
+      num = AI.requirePlayCard(buf[0], buf[1])
+      if num == -1:
+        break
+      self.PlayerPlayCardFromHand(executorPlayer, num)
 
   def isFirstTurn(self) -> bool:
     return self.turnCount == 0
   
-  def decidePlayerOrder(self) -> None:
+  def setPlayerOrder(self) -> None:
     random.shuffle(self.playerOrder)
 
   def setAllPlayerCards(self) -> None:
@@ -126,25 +144,42 @@ class GameMaster:
       return
     executorPlayer.Hands.append(executorPlayer.Deck.pop(0))
 
-  def PlayerPutCardToManaZone(self, executorPlayer: Player, handNum: int) -> None:
+  def PlayerPutCardToMannaZone(self, executorPlayer: Player, handNum: int) -> None:
     card = executorPlayer.Hands.pop(handNum)
     print(f"{executorPlayer.Name}が{card.name}をエサ場に置きました")
-    executorPlayer.ManaZone.append(card)
+    executorPlayer.MannaZone.append(card)
 
   def PlayerPlayCardFromHand(self, executorPlayer: Player, handNum: int) -> None:
     card = executorPlayer.Hands.pop(handNum)
-    if not self.PlayerIsCostEnough(card):
+    if not self.isCardPlayable(executorPlayer, card):
       executorPlayer.Hands.insert(handNum, card)
       return
     
+    print(f"{executorPlayer.Name}が{card.name}をプレイしました")
+    executorPlayer.mannas -= card.cost
     if issubclass(Cards.Insect, type(card)):
       executorPlayer.BattleZone.append(card)
     else:
       raise Exception
+  
+  def PlayerCountMannas(self, executorPlayer: Player) -> None:
+    executorPlayer.mannas = len(executorPlayer.MannaZone)
+  
+  def isPlayersMannaEnough(self, executorPlayer: Player, card: Cards.Card) -> bool:
+    return card.cost <= executorPlayer.mannas
+  
+  def isCardPlayable(self, executorPlayer: Player, card: Cards.Card) -> bool:
+    return self.isPlayersMannaEnough(executorPlayer, card)
 
-  def PlayerIsCostEnough(self, executorPlayer: Player, card: Cards.Card) -> bool:
-    return card.cost <= executorPlayer.manas
-
+  def getPlayableCardAndKeys(self, executorPlayer: Player) -> tuple[list[int], list[Cards.Card]]:
+    resultIndex = []
+    resultCards = []
+    for (index, card) in enumerate(executorPlayer.Hands):
+      if self.isCardPlayable(executorPlayer, card):
+        resultIndex.append(index)
+        resultCards.append(card)
+    return resultIndex, resultCards
+  
   def libraryOutJudgment(self) -> None:
     if len(self.PlayerA.Shields) > len(self.PlayerB.Shields):
       print("PlayerAの勝ち")
