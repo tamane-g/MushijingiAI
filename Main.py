@@ -30,7 +30,7 @@ def CardDefine(id: int) -> Cards.Card:
                           card_data["Color"],
                           [(card_data["Atk_1_method"],
                             card_data["Atk_1_value"]),
-                            (card_data["Atk_2_method"],
+                           (card_data["Atk_2_method"],
                             card_data["Atk_2_value"])])
 
 class Player:
@@ -71,6 +71,7 @@ class GameMaster:
     self.playerOrder = [self.PlayerA, self.PlayerB]
     self.turnCount = 0
     self.gameEnd = False
+    self.currentPlayerOrder = 0
   
   def runGame(self) -> None:
     self.setAllPlayerCards() # 縄張りや手札をセットアップ
@@ -80,7 +81,9 @@ class GameMaster:
       for currentPlayer in self.playerOrder:
         if self.gameEnd:
           break
+        self.refreshBattleZone()
         self.executeTurn(currentPlayer)
+        self.currentPlayerOrder = not self.currentPlayerOrder
   
   def executeTurn(self, currentPlayer: Player) -> None:
     # ドロー処理
@@ -98,6 +101,11 @@ class GameMaster:
     
     self.turnCount += 1 # ターン数をインクリメント
 
+  def refreshBattleZone(self) -> None:
+    for player in self.playerOrder:
+      for insect in player.BattleZone:
+        insect.reset()
+
   def userTurnExecution(self, executorPlayer: Player) -> None:
     View.showTurn(self.turnCount)
     View.showCards(executorPlayer.Hands)
@@ -107,12 +115,55 @@ class GameMaster:
     self.PlayerCountMannas(executorPlayer)
     
     while(True):
-      View.showCards(executorPlayer.Hands)
-      num = View.requirePlayCard(self.getPlayableCardAndKeys(executorPlayer)[0])
+      self.userShowCards(executorPlayer)
+      num = View.requireAction(self.userGetInputtableKeys(executorPlayer))
       if num == -1:
         break
-      self.PlayerPlayCardFromHand(executorPlayer, num)
+      self.userActionFromKey(executorPlayer, num)
+    print()
   
+  def userShowCards(self, executorPlayer: Player) -> None:
+    View.showText("Battle zone: ")
+    View.showCards(executorPlayer.BattleZone)
+    View.showText("Hand: ")
+    View.showCards(executorPlayer.Hands, 20)
+  
+  def userGetInputtableKeys(self, executorPlayer: Player) -> list[int]:
+    playable = self.getPlayableCardAndKeys(executorPlayer)[0]
+    attackable = self.getAttackableInsectAndKeys(executorPlayer)[0]
+    
+    result = []
+    for index,_ in enumerate(attackable):
+      result.append(index)
+    for index,_ in enumerate(playable):
+      result.append(index + 20)
+    
+    return result
+  
+  def userActionFromKey(self, executorPlayer: Player, key: int) -> None:
+    if key >= 20:
+      self.PlayerPlayCardFromHand(executorPlayer, key-20)
+    else:
+      selectedInsect = self.getAttackableInsectAndKeys(executorPlayer)[1][key]
+      inputtableValue, inputtableAtk = self.getSelectableAttackAndKeys(selectedInsect)
+      selectedAtkIndex = View.requireSelectAttack(inputtableValue)
+      if selectedAtkIndex == -1:
+        return
+      atkMethod, atkValue = inputtableAtk[selectedAtkIndex]
+      opponentPlayer = self.getOpponentPlayer()
+      targettables = self.getTargettableInsectAndKeys(opponentPlayer)
+      View.showCards(targettables[1])
+      
+      if len(opponentPlayer.BattleZone) == 0:
+        self.PlayerBeDamaged(opponentPlayer, isDirect=True)
+      else:
+        targetInsectNum = View.requireTargetInsect(targettables[0])
+        if targetInsectNum == -1:
+          return
+        self.InsectAttack(opponentPlayer, targetInsectNum, atkMethod, atkValue)
+        
+      selectedInsect.isAttacked = True
+    
   def AI_TurnExecution(self, executorPlayer: Player) -> None:
     View.showTurn(self.turnCount)
     num = AI.requireMannaSet(executorPlayer.Hands)
@@ -122,7 +173,7 @@ class GameMaster:
     
     while(True):
       buf = self.getPlayableCardAndKeys(executorPlayer)
-      num = AI.requirePlayCard(buf[0], buf[1])
+      num = AI.requireAction(buf[0], buf[1])
       if num == -1:
         break
       self.PlayerPlayCardFromHand(executorPlayer, num)
@@ -136,6 +187,22 @@ class GameMaster:
   def setAllPlayerCards(self) -> None:
     for executorPlayer in self.playerOrder:
       executorPlayer.setCards()
+  
+  def InsectAttack(self, targetPlayer: Player, targetInsectNum: int, atkMethod: str, atkValue: int):
+    match atkMethod:
+      case "Simple":
+        self.InsectOnBattleZoneBeDamaged(targetPlayer, targetInsectNum, atkValue)
+        
+  def InsectOnBattleZoneBeDamaged(self, owner: Player, BattleZoneOrder: int, value: int, isEffectDamage: bool = False):
+    insect = owner.BattleZone[BattleZoneOrder]
+    insect.NowHP -= value
+    View.showText(f"{insect.name}に{value}のダメージ！")
+    if insect.NowHP <= 0:
+      View.showText(f"{insect.name}は破壊された！")
+      owner.BattleZone.pop(BattleZoneOrder)
+      owner.Trash.append(insect)
+      if not isEffectDamage:
+        self.PlayerBeDamaged(owner)
 
   def PlayerDrawDeck(self, executorPlayer: Player) -> None:
     # ライブラリアウト時
@@ -144,9 +211,20 @@ class GameMaster:
       return
     executorPlayer.Hands.append(executorPlayer.Deck.pop(0))
 
+  def PlayerBeDamaged(self, beDamagedPlayer: Player, isDirect: bool = False) -> None:
+    if len(beDamagedPlayer.Shields) == 0 and isDirect:
+      self.gameEnd = True
+      return
+    elif len(beDamagedPlayer.Shields) == 0:
+      return
+    View.showText(f"{beDamagedPlayer.Name}の縄張りが一枚破壊された！")
+    card = beDamagedPlayer.Shields.pop(0)
+    beDamagedPlayer.Hands.append(card)
+
+
   def PlayerPutCardToMannaZone(self, executorPlayer: Player, handNum: int) -> None:
     card = executorPlayer.Hands.pop(handNum)
-    print(f"{executorPlayer.Name}が{card.name}をエサ場に置きました")
+    View.showText(f"{executorPlayer.Name}が{card.name}をエサ場に置きました")
     executorPlayer.MannaZone.append(card)
 
   def PlayerPlayCardFromHand(self, executorPlayer: Player, handNum: int) -> None:
@@ -155,7 +233,7 @@ class GameMaster:
       executorPlayer.Hands.insert(handNum, card)
       return
     
-    print(f"{executorPlayer.Name}が{card.name}をプレイしました")
+    View.showText(f"{executorPlayer.Name}が{card.name}をプレイしました")
     executorPlayer.mannas -= card.cost
     if issubclass(Cards.Insect, type(card)):
       executorPlayer.BattleZone.append(card)
@@ -174,11 +252,41 @@ class GameMaster:
   def getPlayableCardAndKeys(self, executorPlayer: Player) -> tuple[list[int], list[Cards.Card]]:
     resultIndex = []
     resultCards = []
-    for (index, card) in enumerate(executorPlayer.Hands):
+    for index,card in enumerate(executorPlayer.Hands):
       if self.isCardPlayable(executorPlayer, card):
         resultIndex.append(index)
         resultCards.append(card)
     return resultIndex, resultCards
+  
+  def getAttackableInsectAndKeys(self, executorPlayer: Player) -> tuple[list[int], list[Cards.Insect]]:
+    resultIndex = []
+    resultCards = []
+    for index,insect in enumerate(executorPlayer.BattleZone):
+      if not insect.isAttacked:
+        resultIndex.append(index)
+        resultCards.append(insect)
+    return resultIndex, resultCards
+  
+  def getTargettableInsectAndKeys(self, targetPlayer: Player) -> tuple[list[int], list[Cards.Insect]]:
+    resultIndex = []
+    resultCards = []
+    for index,insect in enumerate(targetPlayer.BattleZone):
+      resultIndex.append(index)
+      resultCards.append(insect)
+    return resultIndex, resultCards
+  
+  def getSelectableAttackAndKeys(self, insect: Cards.Insect) -> tuple[list[int], list[tuple[str, int]]]:
+    inputtableIndex = []
+    inputtableAtk = []
+    for index,atk in enumerate(insect.atkList):
+      if str(atk[0]) != "nan":
+        print(f"{index}: {atk[0]} {atk[1]}")
+        inputtableIndex.append(index)
+        inputtableAtk.append(atk)
+    return inputtableIndex, inputtableAtk
+  
+  def getOpponentPlayer(self) -> Player:
+    return self.playerOrder[not self.currentPlayerOrder]
   
   def libraryOutJudgment(self) -> None:
     if len(self.PlayerA.Shields) > len(self.PlayerB.Shields):
@@ -188,8 +296,3 @@ class GameMaster:
     else:
       print("PlayerBの勝ち")
     self.gameEnd = True
-
-"""  def InsectAtkChoice(executorPlayer: Player, executorInsect: Cards.Insect, atkMethod: str, atkInt: int):
-    match atkMethod:
-      case "Simple":
-        """

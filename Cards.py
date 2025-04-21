@@ -12,8 +12,8 @@ class Insect(Card):
         self.NowHP     = hp
         self.color     = color
         self.atkList   = atkList
-        self.isAtacked = False
+        self.isAttacked = False
     
     def reset(self):
-        self.NowHP     = self._BaseHP
-        self.isAtacked = False
+        self.NowHP      = self._BaseHP
+        self.isAttacked = False
